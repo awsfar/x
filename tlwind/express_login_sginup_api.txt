@@ -1,0 +1,126 @@
+Sure, here's a multi-file structure example for creating a login and register API using Express.js, TypeORM, and PostgreSQL.
+
+
+User Entity (user.entity.js)
+
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn()
+  id = undefined;
+
+  @Column('text')
+  username = '';
+
+  @Column('text')
+  email = '';
+
+  @Column('text')
+  password = '';
+}
+
+Database Connection (database.js)
+
+import { createConnection } from 'typeorm';
+import { User } from './user.entity';
+
+export default async function connectToDatabase() {
+  await createConnection({
+    type: 'postgres',
+    host: 'localhost',
+    port: 5432,
+    username: 'your_username',
+    password: 'your_password',
+    database: 'your_database',
+    entities: [User],
+    synchronize: true,
+  });
+}
+
+Authentication Service (auth.service.js)
+
+import { getRepository } from 'typeorm';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { User } from './user.entity';
+
+class AuthService {
+  async register(username, email, password) {
+    const userRepository = getRepository(User);
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = userRepository.create({ username, email, password: hashedPassword });
+
+    await userRepository.save(user);
+
+    return { message: 'User registered successfully' };
+  }
+
+  async login(email, password) {
+    const userRepository = getRepository(User);
+
+    const user = await userRepository.findOne({ email });
+
+    if (!user) {
+      throw new Error('Invalid email or password');
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      throw new Error('Invalid email or password');
+    }
+
+    const token = jwt.sign({ userId: user.id }, 'secret-key');
+
+    return { token };
+  }
+}
+
+export default new AuthService();
+
+Express Server (server.js)
+
+import express from 'express';
+import connectToDatabase from './database';
+import AuthService from './auth.service';
+
+const app = express();
+app.use(express.json());
+
+app.post('/register', async (req, res) => {
+  const { username, email, password } = req.body;
+
+  try {
+    const response = await AuthService.register(username, email, password);
+    res.status(201).json(response);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+app.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const response = await AuthService.login(email, password);
+    res.json(response);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
+connectToDatabase()
+  .then(() => {
+    app.listen(3000, () => {
+      console.log('Server is running on port 3000');
+    });
+  })
+  .catch((error) => console.log('Error connecting to the database: ', error));
+
+Remember to replace 'your_username', 'your_password', and 'your_database' with your actual PostgreSQL credentials. This is a basic setup and may need enhancements according to your use case, like error handling, input validation, and security measures.
+
+
+Before running the server, make sure to install the dependencies (express, typeorm, pg, bcrypt, jsonwebtoken, etc.) with npm.
